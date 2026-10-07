@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#121213">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wordle">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Wordle</title>
+<style>
+  :root { --tile: min(14vw, 62px); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { background:#121213; color:#fff; font-family:Arial,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; margin:0; padding:max(12px, env(safe-area-inset-top)) 8px max(12px, env(safe-area-inset-bottom)); user-select:none; -webkit-user-select:none; touch-action:manipulation; overscroll-behavior:none; }
+  h1 { letter-spacing:6px; margin:0; font-size:1.6rem; }
+  #message { min-height:28px; font-weight:bold; text-align:center; }
+  #board { display:grid; gap:5px; }
+  .row { display:grid; grid-template-columns:repeat(5,var(--tile)); gap:5px; }
+  .tile { height:var(--tile); border:2px solid #3a3a3c; display:flex; align-items:center; justify-content:center; font-size:calc(var(--tile) * .55); font-weight:bold; text-transform:uppercase; }
+  .tile.filled { border-color:#565758; }
+  #keyboard { display:flex; flex-direction:column; gap:6px; width:100%; max-width:500px; }
+  .krow { display:flex; gap:5px; width:100%; justify-content:center; }
+  .key { flex:1; min-width:0; height:54px; border:none; border-radius:4px; background:#818384; color:#fff; font-weight:bold; font-size:1rem; cursor:pointer; text-transform:uppercase; padding:0; }
+  .key.wide { flex:1.6; font-size:.8rem; }
+  .key:active { opacity:.7; }
+  .correct { background:#538d4e !important; border-color:#538d4e !important; }
+  .present { background:#b59f3b !important; border-color:#b59f3b !important; }
+  .absent  { background:#3a3a3c !important; border-color:#3a3a3c !important; }
+  #restart { padding:8px 18px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; }
+</style>
+</head>
+<body>
+  <h1>WORDLE</h1>
+  <div id="message"></div>
+  <div id="board"></div>
+  <div id="keyboard"></div>
+  <button id="restart" onclick="startGame()">New game</button>
+
+<script>
+const WORDS = ["apple","brave","crane","drink","eagle","flame","grape","house","input","joker","knife","lemon","music","night","ocean","piano","queen","river","stone","tiger","uncle","voice","water","young","zebra","about","above","actor","adult","after","again","alarm","album","angry","apart","arena","argue","arise","armor","array","aside","audio","avoid","award","aware","basic","beach","begin","black","blame","blind","block","blood","board","brain","bread","break","brick","bring","broad","brown","build","cabin","candy","chair","chalk","charm","chase","cheap","check","chess","chief","child","clean","clear","climb","clock","close","cloud","coach","coast","count","cover","craft","crash","cream","cross","crowd","dance","death","depth","dream","dress","drive","earth","empty","enemy","enjoy","enter","equal","error","event","every","exact","faith","false","field","fight","final","floor","focus","force","frame","fresh","front","fruit","giant","glass","globe","grace","grass","great","green","group","guard","guess","guide","happy","heart","heavy","honey","horse","hotel","human","ideal","image","issue","judge","juice","laugh","layer","learn","light","local","lucky","lunch","magic","major","march","match","metal","money","month","mouse","mouth","movie","novel","nurse","order","paint","paper","party","peace","phone","photo","pilot","pizza","plane","plant","point","power","price","pride","proud","quick","quiet","radio","raise","range","reach","ready","right","round","royal","scale","scene","score","shape","sharp","sheep","shirt","shoot","short","sight","skill","sleep","small","smile","smoke","snake","solid","sound","south","space","speak","speed","spend","sport","staff","stage","start","state","steel","still","storm","story","sugar","sweet","table","taste","teach","thank","thing","think","three","throw","title","today","touch","tower","track","trade","train","trust","truth","twice","under","union","until","upper","urban","usual","value","video","visit","wagon","waste","watch","wheel","white","whole","woman","world","worry","write","wrong","youth"];
+
+const ROWS = 6, COLS = 5;
+const KEYBOARD = [
+  "qwertyuiop".split(""),
+  "asdfghjkl".split(""),
+  ["Enter", ..."zxcvbnm".split(""), "Backspace"]
+];
+const LETTER_RE = /^[a-z]$/;
+
+let answer, row, col, guess, over, keyColors;
+
+const board = document.getElementById("board");
+const keyboard = document.getElementById("keyboard");
+const message = document.getElementById("message");
+
+function startGame() {
+  answer = WORDS[Math.floor(Math.random() * WORDS.length)];
+  row = 0; col = 0; guess = []; over = false; keyColors = {};
+  message.textContent = "";
+
+  board.innerHTML = "";
+  for (let r = 0; r < ROWS; r++) {
+    const rowEl = document.createElement("div");
+    rowEl.className = "row";
+    for (let c = 0; c < COLS; c++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      tile.id = `tile-${r}-${c}`;
+      rowEl.appendChild(tile);
+    }
+    board.appendChild(rowEl);
+  }
+
+  keyboard.innerHTML = "";
+  KEYBOARD.forEach(keys => {
+    const rowEl = document.createElement("div");
+    rowEl.className = "krow";
+    keys.forEach(k => {
+      const btn = document.createElement("button");
+      btn.className = "key" + (k.length > 1 ? " wide" : "");
+      btn.id = "key-" + k;
+      btn.textContent = k === "Backspace" ? "⌫" : k;
+      btn.onclick = () => handleKey(k);
+      rowEl.appendChild(btn);
+    });
+    keyboard.appendChild(rowEl);
+  });
+}
+
+function handleKey(k) {
+  if (over) return;
+  if (k === "Enter") return submitGuess();
+  if (k === "Backspace") {
+    if (col > 0) {
+      col--; guess.pop();
+      const t = document.getElementById(`tile-${row}-${col}`);
+      t.textContent = ""; t.classList.remove("filled");
+    }
+    return;
+  }
+  k = k.toLowerCase();
+  if (LETTER_RE.test(k) && col < COLS) {
+    const t = document.getElementById(`tile-${row}-${col}`);
+    t.textContent = k; t.classList.add("filled");
+    guess.push(k); col++;
+  }
+}
+
+function submitGuess() {
+  if (col < COLS) { message.textContent = "Not enough letters"; return; }
+  const word = guess.join("");
+  if (!WORDS.includes(word)) { message.textContent = "Not in word list"; return; }
+  message.textContent = "";
+
+  // Step 1: mark greens. Step 2: mark yellows (respecting duplicate letters).
+  const result = Array(COLS).fill("absent");
+  const remaining = answer.split("");
+  for (let i = 0; i < COLS; i++) {
+    if (word[i] === answer[i]) { result[i] = "correct"; remaining[i] = null; }
+  }
+  for (let i = 0; i < COLS; i++) {
+    if (result[i] === "correct") continue;
+    const idx = remaining.indexOf(word[i]);
+    if (idx !== -1) { result[i] = "present"; remaining[idx] = null; }
+  }
+
+  const priority = { absent: 1, present: 2, correct: 3 };
+  for (let i = 0; i < COLS; i++) {
+    document.getElementById(`tile-${row}-${i}`).classList.add(result[i]);
+    const letter = word[i];
+    if (!keyColors[letter] || priority[result[i]] > priority[keyColors[letter]]) {
+      keyColors[letter] = result[i];
+      const keyEl = document.getElementById("key-" + letter);
+      keyEl.classList.remove("absent", "present", "correct");
+      keyEl.classList.add(result[i]);
+    }
+  }
+
+  if (word === answer) { message.textContent = "You win! 🎉"; over = true; return; }
+  row++; col = 0; guess = [];
+  if (row === ROWS) { message.textContent = "The word was: " + answer.toUpperCase(); over = true; }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  handleKey(e.key);
+});
+
+startGame();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+}
+</script>
+</body>
+</html>
